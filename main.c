@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <string.h>
-#include "pluginSdk.h"
+#include "headers/pluginSdk.h"
 
 void run(Args *ar)
 {
@@ -18,7 +18,7 @@ void run(Args *ar)
         exit(1);
     }
 
-    dlerror(); // clear
+    dlerror(); // clear previous errors
 
     *(void **)(&plugin_entry) = dlsym(handle, ar->func);
     if ((error = dlerror()) != NULL) {
@@ -37,32 +37,56 @@ void runCore(Args *ar, char *func)
     ar->plug = "core";
     ar->func = func;
     run(ar);
-    freeArgs(ar);
+    freeArgs(ar); // assume this frees args + malloc'd stuff
 }
 
 int main(int argc, char **argv)
 {
-    if (argc < 3) {
-        fprintf(stderr, "Usage: %s <command> <arg>\n", argv[0]);
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <command> [options] [path]\n", argv[0]);
         return 1;
     }
 
-    char *p = argv[1];
+    char *p = argv[1]; // first command, like "-l"
 
     while (*p) {
         switch (*p) {
-            case 'l': {
-                Args *ar = malloc(sizeof(Args));
-                ar->argsLen = 1;
-                ar->args = malloc(sizeof(void*) * ar->argsLen);
-                ar->args[0] = argv[2];   // pass string
-                ar->order = "s";         // describe type order
-                runCore(ar, "plcliLs");
-                break;
-            }
+            case 'l': { // list
+                          Args *ar = malloc(sizeof(Args));
+                          ar->argsLen = 2;
+                          ar->args = malloc(sizeof(void*) * ar->argsLen);
+
+                          int showAll = 0;    // default = off
+                          char *path = ".";   // default = current dir
+
+                          // parse remaining arguments
+                          for (int i = 2; i < argc; i++) {
+                              if (strcmp(argv[i], "-a") == 0) {
+                                  showAll = 1;
+                              } else if (argv[i][0] != '-') {
+                                  path = argv[i];
+                              }
+                          }
+
+                          // assign into Args
+                          ar->args[0] = path;
+                          ar->args[1] = malloc(sizeof(int));
+                          *(int*)ar->args[1] = showAll;
+
+                          ar->order = "si"; // string, int
+                          runCore(ar, "plcliLs");
+                          break;
+                      }
+
+            default:
+                      if (*p != '-') {
+                          fprintf(stderr, "Unknown command: -%c\n", *p);
+                          return 1;
+                      }
         }
-        p++;
+        p++; // move to next char inside argv[1]
     }
+
     return 0;
 }
 
