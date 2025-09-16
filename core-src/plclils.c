@@ -1,6 +1,8 @@
 #include "headers/plclils.h"
 #include "headers/utils.h"
+#include "headers/pluginSdk.h"
 #include <stdio.h>
+#include <string.h>
 
 #ifdef __linux__
 #include <dirent.h>
@@ -9,8 +11,15 @@
 #define CLOSEDIR closedir 
 #endif
 
-int plcliLs(char *path)
+int plcliLs(Args *args)
 {
+    if (strcmp(args->order, "s") != 0) {
+        errf("Wrong arg order! Excepted [s], Got [%s].", args->order);
+        return -1;
+    }
+
+    char *path = args->args[0]; 
+
     if (!path) {
         errf("No path given");
         return -1;
