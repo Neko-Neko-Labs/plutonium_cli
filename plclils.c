@@ -1,3 +1,4 @@
+#include <linux/limits.h>
 #define _DEFAULT_SOURCE
 #include "headers/utils.h"
 #include <string.h>
@@ -15,6 +16,17 @@ errf("Un Supported OS");
 #endif
 
 typedef struct dirent Dirent;
+
+typedef struct File {
+    char* name;
+    enum {
+        KFILE,
+        KDIR,
+        CODE,
+        LINK,
+    } type;
+} File;
+
 
 int includes(char **arr, int size, char *element)
 {
@@ -86,7 +98,10 @@ int plcliLs(char *path, int showAll)
         return -1;
     }
 
+    int arrLen = getCount_but(path, showAll);
+    File *files = malloc(sizeof(File) * arrLen);
     Dirent *entry;
+    int index = 0;
     while ((entry = READDIR(dir)) != NULL) {
         int hidden = entry->d_name[0] == '.' ? 1 : 0;
         if (hidden && !showAll) {
@@ -96,37 +111,23 @@ int plcliLs(char *path, int showAll)
         char *ext = get_extension(entry->d_name);
         char *codeFiles[] = {"c", "py", "cpp", "java", "h", "hpp", "js"};
         int isCode = ext ? includes(codeFiles, sizeof(codeFiles)/sizeof(codeFiles[0]), ext) : 0;
-
+        File flTemp = {
+            .name = entry->d_name,
+            .type = KFILE
+        };
         if (isCode) {
+            flTemp.type = CODE;
             printf("%s%s%s\n", hidden ? C_BRIGHT_RED : C_RED, entry->d_name, STYLE_RESET);
         } else {
             switch (entry->d_type) {
                 case DT_DIR:
+                    flTemp.type = KDIR;
                     printf("%s%s%s\n", hidden ? C_BRIGHT_BLUE : C_BLUE, entry->d_name, STYLE_RESET);
                     break;
 
-                case DT_REG:
-                    printf("%s%s%s\n", hidden ? C_BRIGHT_WHITE : C_WHITE, entry->d_name, STYLE_RESET);
-                    break;
-
                 case DT_LNK:
+                    flTemp.type = LINK;
                     printf("%s%s%s\n", hidden ? C_BRIGHT_CYAN : C_CYAN, entry->d_name, STYLE_RESET);
-                    break;
-
-                case DT_FIFO:
-                    printf("%s%s%s\n", hidden ? C_BRIGHT_YELLOW : C_YELLOW, entry->d_name, STYLE_RESET);
-                    break;
-
-                case DT_SOCK:
-                    printf("%s%s%s\n", hidden ? C_BRIGHT_MAGENTA : C_MAGENTA, entry->d_name, STYLE_RESET);
-                    break;
-
-                case DT_CHR:
-                    printf("%s%s%s\n", hidden ? C_BRIGHT_RED : C_RED, entry->d_name, STYLE_RESET);
-                    break;
-
-                case DT_BLK:
-                    printf("%s%s%s\n", hidden ? C_BRIGHT_GREEN : C_GREEN, entry->d_name, STYLE_RESET);
                     break;
 
                 default:
@@ -134,6 +135,7 @@ int plcliLs(char *path, int showAll)
                     break;
             }
         }
+        files[index++] = flTemp;
     }
 
     CLOSEDIR(dir);
