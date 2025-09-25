@@ -1,0 +1,235 @@
+❯ time ls testDit > /dev/null
+ls -x --color=auto testDit > /dev/null  0.03s user 0.01s system 97% cpu 0.043 total
+❯ time ./plcli -l testDit > /dev/null
+./plcli -l testDit > /dev/null  0.01s user 0.02s system 98% cpu 0.022 total
+❯ time ./plcli -l testDit > /dev/null
+./plcli -l testDit > /dev/null  0.00s user 0.02s system 96% cpu 0.023 total
+❯ time ./plcli -l testDit > /dev/null
+./plcli -l testDit > /dev/null  0.01s user 0.01s system 97% cpu 0.022 total
+❯ time ./plcli -l testDit > /dev/null
+./plcli -l testDit > /dev/null  0.01s user 0.01s system 97% cpu 0.023 total
+❯ time ls testDit > /dev/null
+ls -x --color=auto testDit > /dev/null  0.03s user 0.01s system 98% cpu 0.042 total
+❯ cat plclils.c
+#include <iso646.h>
+#include <linux/limits.h>
+#define _DEFAULT_SOURCE
+#include "headers/utils.h"
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "headers/colors.h"
+
+#ifdef __linux__
+#include <dirent.h>
+#define OPENDIR opendir
+#define CLOSEDIR closedir
+#define READDIR readdir
+#else
+errf("Un Supported OS");
+#endif
+
+typedef struct dirent Dirent;
+
+typedef struct File {
+    char* name;
+    enum {
+        KFILE,
+        KDIR,
+        CODE,
+        LINK,
+    } type;
+} File;
+
+//Sorting
+int cmpFiles (const void *a, const void *b)
+{
+    File *x = (File*)a;
+    File *y = (File*)b;
+
+    if (y->type == KDIR && x->type != KDIR) return 1;
+    if (y->type != KDIR && x->type == KDIR) return -1;
+    return strcmp(x->name, y->name);
+}
+
+
+/*
+ * Takes the element, array and size of it.
+ * moves in array till it founds it.
+ * if found retunrs 1;
+ * if not return 0;
+ * Unix-like returning like in `strcmp`
+ * ----DOC INFO----
+ *  By: Koofte
+ *  Level: 4 Byte
+ */
+int includes(char **arr, int size, char *element)
+{
+    for (int i = 0; i < size; i++) {
+        if (strcmp(arr[i], element) == 0) {
+            return 1; // true: found
+        }
+    }
+    return 0; // false: not found
+}
+
+//Duh... it get the extension and returns it. I wont even doc; <- The ';' traumma; <- Again; <- Again; <- Lol thats end couse, again ->;
+char *get_extension(const char *filename)
+{
+    if (!filename) return NULL;
+
+    const char *dot = strrchr(filename, '.');
+    if (!dot || dot == filename) {
+        return NULL;
+    }
+
+    return (char*)(dot + 1);
+}
+
+//Option one. Idk is slow or fast;
+//For more detail read the getCount_but doc. This is its mk1
+int getCount(char *path, int showAll)
+{
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "ls %s -1 %s | wc -l", showAll ? "-a" : " ", path); //i like the fact ls -a -1 ~ and ls        -1 ~ same
+    FILE *cd = popen(cmd, "r"); //Opening file but dynamicly; Also its cmd;
+
+    if (!cd) {
+        errf("Cant get the file count! We would mess up the listing order!"); //I wont use ordering if cant get count;
+        return -1;
+    }
+
+    char buf[128];
+    int count;
+    fgets(buf, sizeof(buf), cd);
+    count = atoi(buf); //Unsafe FIX on mk2;
+
+    if (count < 1) return -1;
+    pclose(cd);
+    return count;
+}
+
+/*
+ * The function we use to get count of evry item in dir.
+ * This is mk2
+ * Moves in evry elemnt and counts. Also takes dirC to return total dir count in the dir.
+ * ----DOC INFO----
+ *  By: Koofte
+ *  Level: 4 Byte
+ */
+int getCount_but(char *path, int showAll)
+{
+    if (!path) { errf("No path given"); return -1; }
+    DIR *dir = OPENDIR(path);
+    if (!dir) { errf("Can't open the directory: %s", path); return -1; }
+    int count = 0;
+    Dirent *entry;
+    while((entry = READDIR(dir)) != NULL) {
+        if (!showAll && entry->d_name[0] == '.') continue;
+        ++count; //FEELS OPTIMIZED THEN count++ IDK IF ITS TRUE THOOOOO!!!! ALL CAPS BABY
+    }
+    CLOSEDIR(dir);
+    return count;
+}
+
+int plcliLs(char *path, int showAll) //rename couse... Lets be honest... this sucks... Go lern you should use snake or cammel case on C!;
+{
+    if (!path) {
+        errf("No path given");
+        return -1;
+    }
+
+    DIR *dir = OPENDIR(path);
+    if (!dir) {
+        errf("Can't open the directory: %s", path);
+        return -1;
+    }
+
+    /*
+     * The Pre-Sorting we use
+     * We have 2 indexes. 1 to pints top of the array @index
+     * and another one we calculate using total elemnts and dirs
+     * the calculations is
+     * total-(total-dirs)-1
+     * Why: couse its actualy
+     * total-files-1
+     * but we have dirs so we do total-dirs to find files
+     * so we got the
+     * total-files and -1 for converting 1-2-3 to 0-1-2
+     * we put dirs on first index variable and files to fIndex varable so
+     * the array always becomes dirs first fiels then
+     * its messier btu more cpu and optimization friendly than qsort or so
+     * idk qsort is fine but extra optimization is always gain? and common if there is 123341 dirs and 1395724851 files,
+     * this would make difirance
+     * ----DOC INFO----
+     *  Level: 4Byte
+     *  By: Koofte
+     */
+
+    int arrLen = getCount_but(path, showAll);
+    if (arrLen < 1) {
+        errf("Failed to read dir: %s", path);
+        return -1;
+    }
+    File *files = malloc(sizeof(File) * arrLen);
+    if (!files) return -1; //TODO: add error handelign too!
+    Dirent *entry;
+    int index = 0;
+    while ((entry = READDIR(dir)) != NULL) {
+        int hidden = entry->d_name[0] == '.' ? 1 : 0;
+        if (hidden && !showAll) {
+            continue; // skip hidden unless -a
+        }
+
+        char *ext = get_extension(entry->d_name);
+        char *codeFiles[] = {"c", "py", "cpp", "java", "h", "hpp", "js"};
+        int isCode = ext ? includes(codeFiles, sizeof(codeFiles)/sizeof(codeFiles[0]), ext) : 0;
+        char *name = strdup(entry->d_name);
+        if (!name) return -1; //TODO: add error handelign too!
+        File flTemp = {
+            .name = name,
+            .type = KFILE
+        };
+        if (isCode) {
+            flTemp.type = CODE;
+        } else {
+            switch (entry->d_type) {
+                case DT_DIR:
+                    flTemp.type = KDIR;
+                    break;
+                case DT_LNK:
+                    flTemp.type = LINK;
+                    break;
+            }
+        }
+        files[index++] = flTemp;
+    }
+    qsort(files, arrLen, sizeof(File), cmpFiles);
+    CLOSEDIR(dir);
+    for (int i = 0; i < arrLen; ++i) {
+        char *typ;
+        switch (files[i].type) {
+            case KDIR: typ=C_CYAN; break;
+            case KFILE: typ=C_GREEN; break;
+            case LINK: typ=C_BLACK; break;
+            case CODE: typ=C_YELLOW; break;
+        }
+
+        printf("%s%s%s\t", typ, files[i].name, STYLE_RESET);
+        if ((i+1) % 5 == 0) printf("\n");
+        free(files[i].name);
+    }
+    free(files);
+    printf("\n");
+    return 0;
+}
+
+❯ stat testDit
+  File: testDit
+  Size: 659456    	Blocks: 1296       IO Block: 4096   directory
+Device: 259,8	Inode: 35924947    Links: 2
+Access: (0755/drwxr-xr-x)  Uid: ( 1000/  koofte)   Gid: ( 1000/  koofte)
+Access: 2025-09-24 21:08:23.491328666 +0300
+Modify: 2025-09-24 21:08:23.475328271 +0300
+Change: 2025-09-24 21:08:23.475328271 +0300
+ Birth: 2025-09-24 21:07:54.504614432 +0300

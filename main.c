@@ -1,4 +1,5 @@
 #include "headers/utils.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "headers/plclils.h"
@@ -42,7 +43,7 @@ freeArgs(ar); // assume this frees args + malloc'd stuff
  **/
 
 typedef struct LsSettings {
-    int showall, humanreadable, showsize;
+    int showall, humanreadable, showsize, batch;
 } LsSettings;
 
 LsSettings readLsOption(char *opt)
@@ -51,7 +52,8 @@ LsSettings readLsOption(char *opt)
     LsSettings set = {
         .humanreadable = 0,
         .showsize = 0,
-        .showall = 0
+        .showall = 0,
+        .batch=5
     };
     char *p = opt;
     while (*p) {
@@ -64,6 +66,14 @@ LsSettings readLsOption(char *opt)
                 break;
             case 's':
                 set.showsize = 1;
+                break;
+            case 'l': 
+                ++p;
+                if (isdigit(*p)) {
+                    set.batch = atoi(p);
+                    while (isdigit(*p)) ++p;
+                    continue;
+                }
                 break;
         }
         ++p; //again feels optimized then p++;
@@ -97,7 +107,7 @@ int main(int argc, char **argv)
                     if (argv[2][0] != '-' && argv[3][0] == '-') opindex=3;
                     set = readLsOption(argv[opindex]);
                 }
-                plcliLs(opindex == 3 ? argv[2] : argv[3], set.showall);
+                plcliLs(opindex == 3 ? argv[2] : argv[3], set.showall, set.batch);
                 break;
             default:
                 if (*p != '-') {
